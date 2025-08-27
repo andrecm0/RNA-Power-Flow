@@ -97,13 +97,19 @@ joblib.dump(scaler_X, 'scaler_X.pkl')
 
 print("Pré-processamento concluído com sucesso. Dados prontos para treinar a RNA.")
 
-# Carrega dados
+######################################################################################################################
+
+# 1. Carregar dados
 X = np.load('X_normalizado.npy')
 y = np.load('y_saida.npy')
-scaler_y = joblib.load('scaler_y.pkl')
-y_normalizado = scaler_y.transform(y)
 
-######################################################################################################################
+# 2. Normalizar y
+scaler_y = StandardScaler()
+y_normalizado = scaler_y.fit_transform(y)
+
+# 3. Salvar o scaler para uso posterior
+joblib.dump(scaler_y, 'scaler_y.pkl')
+print("Scaler de y salvo como 'scaler_y.pkl'.")
 
 # Divide em treino e teste
 X_train, X_test, y_train, y_test = train_test_split(X, y_normalizado, test_size=0.2, random_state=42)

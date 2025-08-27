@@ -6,3 +6,8 @@ Neural Network structured for power flow analysis
 
 ## IEEE 14, 30, 58, 117 e 300 barras disponiveis em : 
 https://labs.ece.uw.edu/pstca/
+
+## Curvas de carga ONS disponiveis em :
+https://dados.ons.org.br/dataset/curva-carga
+
+### A curva de carga utilizada no estudo foi a de 2023, filtrada para região sudeste

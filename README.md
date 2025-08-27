@@ -1,6 +1,10 @@
 # RNA-Power-Flow
 Neural Network structured for power flow analysis
 
+## Esse projeto tem como objetivo o estudo dos sistemas IEEE, utilizando redes neurais artificiais para analisar o fluxo de potência. 
+### Foi utilizado dados reais de carga como parâmetro, e comparado com o tempo que o solver tradicional demoraria para fazer as interações.
+### No projeto também há instruções sobre como encontrar os melhores parametros para uma RNA desse tipo (Grid Search)
+
 # Sistema de Estudo
 [IEEE 14 Barras](https://github.com/user-attachments/files/22007384/Imagem1.tif)
 

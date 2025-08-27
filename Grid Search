@@ -1,0 +1,114 @@
+from sklearn.model_selection import train_test_split
+import numpy as np
+import joblib
+from sklearn.preprocessing import StandardScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout
+from tensorflow.keras.callbacks import EarlyStopping
+from sklearn.metrics import mean_absolute_error
+
+# 1. Carregar dados
+X = np.load('X_normalizado.npy')
+y = np.load('y_saida.npy')
+
+# 2. Normalizar y
+scaler_y = StandardScaler()
+y_normalizado = scaler_y.fit_transform(y)
+
+# 3. Salvar o scaler para uso posterior
+joblib.dump(scaler_y, 'scaler_y.pkl')
+print("Scaler de y salvo como 'scaler_y.pkl'.")
+
+# 4. Dividir os dados
+X_temp, X_test, y_temp, y_test = train_test_split(
+    X, y_normalizado, test_size=0.15, random_state=42)
+X_train, X_val, y_train, y_val = train_test_split(
+    X_temp, y_temp, test_size=0.1765, random_state=42)
+
+# 4.5. Salvar conjuntos (opcional)
+np.save('X_train.npy', X_train)
+np.save('X_val.npy',   X_val)
+np.save('X_test.npy',  X_test)
+np.save('y_train.npy', y_train)
+np.save('y_val.npy',   y_val)
+np.save('y_test.npy',  y_test)
+print("Conjuntos de dados salvos com sucesso.")
+
+# --------------------------------------------------
+# → AQUI COMEÇA O BLOCO DE GRID SEARCH SISTEMÁTICO
+# --------------------------------------------------
+
+import itertools
+import pandas as pd
+
+# Espaço de busca
+ativacoes   = ['linear', 'relu', 'tanh']
+neurons     = [32, 64, 128, 256, 512]
+num_layers  = [1, 2, 3, 4, 5]
+
+resultados = []
+
+# Carrega o scaler de y para reverter depois
+scaler_y = joblib.load('scaler_y.pkl')
+
+# Cria todas as combinações
+for ativacao, n_neuronios, camadas in itertools.product(ativacoes, neurons, num_layers):
+    print(f"\n🔧 Testando: ativação={ativacao}, "
+          f"neurônios={n_neuronios}, camadas={camadas}")
+
+    # Monta o modelo
+    modelo = Sequential()
+    modelo.add(Dense(n_neuronios,
+                     input_dim=X_train.shape[1],
+                     activation=ativacao))
+    for _ in range(camadas - 1):
+        modelo.add(Dense(n_neuronios, activation=ativacao))
+    modelo.add(Dense(y_train.shape[1], activation='linear'))
+
+    modelo.compile(optimizer='adam', loss='mse', metrics=['mae'])
+    es = EarlyStopping(monitor='val_loss', patience=10,
+                       restore_best_weights=True)
+
+    # Treina
+    modelo.fit(
+        X_train, y_train,
+        validation_data=(X_val, y_val),
+        epochs=200,
+        batch_size=32,
+        callbacks=[es],
+        verbose=0
+    )
+
+    # Avalia na escala normalizada
+    loss, mae = modelo.evaluate(X_test, y_test, verbose=0)
+
+    # Reverter normalização para calcular MAE real
+    y_pred_norm = modelo.predict(X_test)
+    y_pred_real = scaler_y.inverse_transform(y_pred_norm)
+    y_test_real = scaler_y.inverse_transform(y_test)
+    mae_real = mean_absolute_error(y_test_real, y_pred_real)
+
+    print(f"📉 Test MAE (normalizado): {mae:.4f}")
+    print(f"📏 MAE real (desnormalizado): {mae_real:.4f}")
+
+    # Armazena resultados com ambos os MAEs
+    resultados.append({
+        'ativacao': ativacao,
+        'neurônios': n_neuronios,
+        'camadas':   camadas,
+        'mae_normalizado': mae,
+        'mae_real': mae_real
+    })
+
+    # Salva se for o melhor
+    if len(resultados) == 0 or mae_real < min([r['mae_real'] for r in resultados]):
+        modelo.save('melhor_modelo.h5')
+        print("💾 Novo melhor modelo salvo como 'melhor_modelo.h5'")
+
+# Converte em DataFrame e salva
+df = pd.DataFrame(resultados).sort_values('mae_real')
+print("\n📊 Top 10 modelos (por MAE real):")
+print(df.head(10))
+
+df.to_csv('resultados_comparativos.csv', index=False)
+print("Resultados salvos em 'resultados_comparativos.csv'.")

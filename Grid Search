@@ -5,27 +5,40 @@ from sklearn.preprocessing import StandardScaler
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.callbacks import EarlyStopping
-from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+import itertools
+import pandas as pd
+from tensorflow.keras import Input
 
-# 1. Carregar dados
+# -------------------------------
+# 1) Carregar dados
+# -------------------------------
 X = np.load('X_normalizado.npy')
 y = np.load('y_saida.npy')
 
-# 2. Normalizar y
+# Garantir que y seja 2D: (n amostras, n_saidas)
+if y.ndim == 1:
+    y = y.reshape(-1, 1)
+
+# -------------------------------
+# 2) Normalizar y e salvar scaler
+# -------------------------------
 scaler_y = StandardScaler()
 y_normalizado = scaler_y.fit_transform(y)
-
-# 3. Salvar o scaler para uso posterior
 joblib.dump(scaler_y, 'scaler_y.pkl')
 print("Scaler de y salvo como 'scaler_y.pkl'.")
 
-# 4. Dividir os dados
+# -------------------------------
+# 3) Split
+# -------------------------------
 X_temp, X_test, y_temp, y_test = train_test_split(
-    X, y_normalizado, test_size=0.15, random_state=42)
+    X, y_normalizado, test_size=0.15, random_state=42
+)
 X_train, X_val, y_train, y_val = train_test_split(
-    X_temp, y_temp, test_size=0.1765, random_state=42)
+    X_temp, y_temp, test_size=0.1765, random_state=42
+)
 
-# 4.5. Salvar conjuntos (opcional)
+# (opcional) salvar conjuntos
 np.save('X_train.npy', X_train)
 np.save('X_val.npy',   X_val)
 np.save('X_test.npy',  X_test)
@@ -35,41 +48,32 @@ np.save('y_test.npy',  y_test)
 print("Conjuntos de dados salvos com sucesso.")
 
 # --------------------------------------------------
-# → AQUI COMEÇA O BLOCO DE GRID SEARCH SISTEMÁTICO
+# → GRID SEARCH (treino com MAE; métricas extras)
 # --------------------------------------------------
-
-import itertools
-import pandas as pd
-
-# Espaço de busca
-ativacoes   = ['linear', 'relu', 'tanh']
-neurons     = [32, 64, 128, 256, 512]
-num_layers  = [1, 2, 3, 4, 5]
+ativacoes  = ['linear', 'relu', 'tanh']
+neurons    = [32, 64, 128, 256, 512]
+num_layers = [1, 2, 3, 4, 5]
 
 resultados = []
-
-# Carrega o scaler de y para reverter depois
+best_mae_real = np.inf  # para salvar o melhor modelo por MAE real
 scaler_y = joblib.load('scaler_y.pkl')
 
-# Cria todas as combinações
 for ativacao, n_neuronios, camadas in itertools.product(ativacoes, neurons, num_layers):
-    print(f"\n🔧 Testando: ativação={ativacao}, "
-          f"neurônios={n_neuronios}, camadas={camadas}")
+    print(f"\n🔧 Testando: ativação={ativacao}, neurônios={n_neuronios}, camadas={camadas}")
 
-    # Monta o modelo
+    # Modelo
     modelo = Sequential()
-    modelo.add(Dense(n_neuronios,
-                     input_dim=X_train.shape[1],
-                     activation=ativacao))
+    modelo.add(Input(shape=(X_train.shape[1],)))
+    modelo.add(Dense(n_neuronios, activation=ativacao))
     for _ in range(camadas - 1):
         modelo.add(Dense(n_neuronios, activation=ativacao))
     modelo.add(Dense(y_train.shape[1], activation='linear'))
 
-    modelo.compile(optimizer='adam', loss='mse', metrics=['mae'])
-    es = EarlyStopping(monitor='val_loss', patience=10,
-                       restore_best_weights=True)
+    # Treinar APENAS com MAE
+    modelo.compile(optimizer='adam', loss='mae', metrics=['mae'])
 
-    # Treina
+    es = EarlyStopping(monitor='val_loss', patience=15, restore_best_weights=True)
+
     modelo.fit(
         X_train, y_train,
         validation_data=(X_val, y_val),
@@ -79,89 +83,41 @@ for ativacao, n_neuronios, camadas in itertools.product(ativacoes, neurons, num_
         verbose=0
     )
 
-    # Avalia na escala normalizada
-    loss, mae = modelo.evaluate(X_test, y_test, verbose=0)
+    # Avaliação em escala normalizada
+    loss_mae_norm, mae_norm = modelo.evaluate(X_test, y_test, verbose=0)
 
-    # Reverter normalização para calcular MAE real
-    y_pred_norm = modelo.predict(X_test)
+    # Predição e métricas em ESCALA REAL (desnormalizada)
+    y_pred_norm = modelo.predict(X_test, verbose=0)
     y_pred_real = scaler_y.inverse_transform(y_pred_norm)
     y_test_real = scaler_y.inverse_transform(y_test)
+
+    # MAE real
     mae_real = mean_absolute_error(y_test_real, y_pred_real)
+    # RMSE real
+    rmse_real = np.sqrt(mean_squared_error(y_test_real, y_pred_real))
+    # R² (médio entre saídas, se multivariado)
+    r2 = r2_score(y_test_real, y_pred_real, multioutput='uniform_average')
 
-    print(f"📉 Test MAE (normalizado): {mae:.4f}")
-    print(f"📏 MAE real (desnormalizado): {mae_real:.4f}")
+    print(f"MAE (norm): {mae_norm:.6f} | MAE (real): {mae_real:.6f} | RMSE (real): {rmse_real:.6f}")
 
-    # Armazena resultados com ambos os MAEs
     resultados.append({
         'ativacao': ativacao,
         'neurônios': n_neuronios,
-        'camadas':   camadas,
-        'mae_normalizado': mae,
-        'mae_real': mae_real
+        'camadas': camadas,
+        'mae_normalizado': mae_norm,
+        'mae_real': mae_real,
+        'rmse_real': rmse_real,
     })
 
-    # Salva se for o melhor
-    if len(resultados) == 0 or mae_real < min([r['mae_real'] for r in resultados]):
-        modelo.save('melhor_modelo.h5')
-        print("💾 Novo melhor modelo salvo como 'melhor_modelo.h5'")
 
-# Converte em DataFrame e salva
-df = pd.DataFrame(resultados).sort_values('mae_real')
-print("\n📊 Top 10 modelos (por MAE real):")
+# DataFrame e ordenação
+df = pd.DataFrame(resultados)
+
+# Ordenar por MAE real (asc), depois RMSE (asc)
+df = df.sort_values(by=['mae_real', 'rmse_real'], ascending=[True, True, False])
+
+print("\n📊 Top 10 modelos (por MAE real, desempate por RMSE):")
 print(df.head(10))
 
 df.to_csv('resultados_comparativos.csv', index=False)
 print("Resultados salvos em 'resultados_comparativos.csv'.")
-
-
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-# Carregar resultados
-df = pd.read_csv('resultados_comparativos.csv')
-
-# Gráfico 1: Boxplot com todas as funções de ativação
-plt.figure(figsize=(6, 4))
-sns.boxplot(data=df, x='ativacao', y='mae', palette='Set2')
-plt.title('Distribuição do MAE por função de ativação')
-plt.xlabel('Função de Ativação')
-plt.ylabel('MAE')
-plt.grid(True)
-plt.tight_layout()
-plt.show()
-
-# Filtrar apenas para função ReLU
-df_relu = df[df['ativacao'] == 'relu']
-
-# Gráfico 2: MAE médio por quantidade de neurônios (somente ReLU)
-plt.figure(figsize=(6, 4))
-sns.lineplot(data=df_relu.sort_values('neurônios'), x='neurônios', y='mae', marker='o', ci=None)
-plt.title('MAE médio por quantidade de neurônios (ReLU)')
-plt.xlabel('Número de Neurônios')
-plt.ylabel('MAE')
-plt.grid(True)
-plt.tight_layout()
-plt.show()
-
-# Gráfico 3: MAE médio por número de camadas (somente ReLU)
-plt.figure(figsize=(6, 4))
-sns.lineplot(data=df_relu.sort_values('camadas'), x='camadas', y='mae', marker='s', ci=None)
-plt.title('MAE médio por número de camadas (ReLU)')
-plt.xlabel('Número de Camadas')
-plt.ylabel('MAE')
-plt.grid(True)
-plt.tight_layout()
-plt.show()
-
-# Gráfico 4: Heatmap (somente ReLU)
-pivot_relu = df_relu.pivot_table(index='neurônios', columns='camadas', values='mae', aggfunc='mean')
-
-plt.figure(figsize=(6, 4))
-sns.heatmap(pivot_relu, annot=True, fmt=".4f", cmap='viridis', cbar_kws={'label': 'MAE'})
-plt.title('Heatmap do MAE médio para função ReLU (Neurônios vs Camadas)')
-plt.xlabel('Número de Camadas')
-plt.ylabel('Número de Neurônios')
-plt.tight_layout()
-plt.show()
-

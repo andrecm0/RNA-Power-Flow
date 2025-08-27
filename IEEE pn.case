@@ -60,7 +60,7 @@ for i, row in curva.iterrows():
     cenarios.append(cenario)
 
 solver_total_time = time.time() - start_solver  # fim da contagem
-print(f"Tempo total solver para {len(curva) * len(fatores_carga)} casos: {solver_total_time:.2f} segundos")
+print(f"Tempo total solver para {len(curva)} casos: {solver_total_time:.2f} segundos")
 
 # Criar DataFrame e salvar
 cenarios_df = pd.DataFrame(cenarios)

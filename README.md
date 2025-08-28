@@ -16,3 +16,11 @@ https://labs.ece.uw.edu/pstca/
 https://dados.ons.org.br/dataset/curva-carga
 
 A curva de carga utilizada no estudo foi a de 2023, filtrada para região sudeste
+
+## Grid Search sistemático para encontrar melhores parâmetros para RNA
+A busca dos melhores parametros foi feita combinando 
+- o numero de camadas (1, 2, 3, 4 e 5)
+- o numero de neuronios por camada (32, 64, 128, 256 e 512)
+- funções de ativação (linear, relu, tanh, sigmoid)
+
+### Dessa forma, foram criados 100 modelos que foram comparados entre si para escolher a melhor arquitetura. 

@@ -10,9 +10,11 @@ import itertools
 import pandas as pd
 from tensorflow.keras import Input
 
-# -------------------------------
+
+##################################################################################################################################
+                                                         CARREGA OS DADOS
+
 # 1) Carregar dados
-# -------------------------------
 X = np.load('X_normalizado.npy')
 y = np.load('y_saida.npy')
 
@@ -20,17 +22,13 @@ y = np.load('y_saida.npy')
 if y.ndim == 1:
     y = y.reshape(-1, 1)
 
-# -------------------------------
 # 2) Normalizar y e salvar scaler
-# -------------------------------
 scaler_y = StandardScaler()
 y_normalizado = scaler_y.fit_transform(y)
 joblib.dump(scaler_y, 'scaler_y.pkl')
 print("Scaler de y salvo como 'scaler_y.pkl'.")
 
-# -------------------------------
 # 3) Split
-# -------------------------------
 X_temp, X_test, y_temp, y_test = train_test_split(
     X, y_normalizado, test_size=0.15, random_state=42
 )
@@ -38,7 +36,7 @@ X_train, X_val, y_train, y_val = train_test_split(
     X_temp, y_temp, test_size=0.1765, random_state=42
 )
 
-# (opcional) salvar conjuntos
+# Salvar conjuntos
 np.save('X_train.npy', X_train)
 np.save('X_val.npy',   X_val)
 np.save('X_test.npy',  X_test)
@@ -47,9 +45,10 @@ np.save('y_val.npy',   y_val)
 np.save('y_test.npy',  y_test)
 print("Conjuntos de dados salvos com sucesso.")
 
-# --------------------------------------------------
-# → GRID SEARCH (treino com MAE; métricas extras)
-# --------------------------------------------------
+##################################################################################################################################
+                                                            GRID SEARCH 
+
+
 ativacoes  = ['linear', 'relu', 'tanh']
 neurons    = [32, 64, 128, 256, 512]
 num_layers = [1, 2, 3, 4, 5]
@@ -112,6 +111,9 @@ for ativacao, n_neuronios, camadas in itertools.product(ativacoes, neurons, num_
 
 # DataFrame e ordenação
 df = pd.DataFrame(resultados)
+
+##################################################################################################################################
+                                                            COMPARA 
 
 # Ordenar por MAE real (asc), depois RMSE (asc)
 df = df.sort_values(by=['mae_real', 'rmse_real'], ascending=[True, True, False])

@@ -1,13 +1,3 @@
-import pandapower.networks as pn
-import pandapower as pp
-import copy
-import time
-import pandas as pd
-import numpy as np
-import joblib
-
-######################################################################################################################
-
 # Carrega o sistema IEEE XX barras
 net = pn.case14() 
 # net = pn.case30() // net = pn.case57() // net = pn.case118() // net = pn.case300()

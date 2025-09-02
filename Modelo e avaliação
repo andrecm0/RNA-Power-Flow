@@ -1,11 +1,3 @@
-import numpy as np
-import joblib
-import matplotlib.pyplot as plt
-from tensorflow.keras import Sequential, Input
-from tensorflow.keras.layers import Dense
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-
 # 1. Carregar dados
 X = np.load('X_normalizado.npy')
 y = np.load('y_saida.npy')
